@@ -1,0 +1,422 @@
+import type { LevelDefinition } from '../config/levels';
+import {
+  POWERUP_LABELS,
+  POWERUP_TYPES,
+  type ActivePowerUpState,
+  type PowerUpType,
+} from '../powerups/PowerUpTimers';
+
+export interface HudCallbacks {
+  onPause: () => void;
+  onResume: () => void;
+  onPunch: () => void;
+  onRestart: () => void;
+}
+
+export interface RunResults {
+  distance: number;
+  level: number;
+  coinsCollected: number;
+  gatesPassed: number;
+  enemiesDefeated: number;
+  finalBalance: number;
+  reason: string;
+}
+
+const TEMPLATE = `
+  <div class="hud-top">
+    <div class="brand">
+      <p class="brand-kicker">INDIAN STREET RUN</p>
+      <h1 class="brand-title">COLLECTOPIA</h1>
+    </div>
+    <div class="hud-stats">
+      <div class="balance-pill">
+        <span class="coin-icon" aria-hidden="true"></span>
+        <span class="balance-value">0</span>
+      </div>
+      <button class="pause-button" type="button" aria-label="Pause game">
+        <span></span><span></span>
+      </button>
+    </div>
+  </div>
+  <div class="level-row">
+    <div class="level-copy">
+      <span class="level-name">Level 1</span>
+      <span class="level-zone">Residential Street</span>
+    </div>
+    <div class="progress-track" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="progress-fill"></div>
+    </div>
+    <span class="progress-value">0%</span>
+  </div>
+  <div class="gate-toast" role="status" aria-live="polite"></div>
+  <div class="powerup-strip" aria-live="polite"></div>
+  <div class="zone-transition" aria-hidden="true">
+    <div class="zone-transition-card">
+      <span class="zone-transition-kicker">ENTERING</span>
+      <strong class="zone-transition-name"></strong>
+    </div>
+  </div>
+  <div class="hint">
+    <span>Swipe or drag to steer</span>
+    <span class="hint-keys">← → or A / D · F or Space to punch · Esc to pause</span>
+  </div>
+  <div class="punch-area">
+    <button class="punch-button" type="button" aria-label="Punch">
+      <span class="punch-icon" aria-hidden="true">👊</span>
+      <span class="punch-label">PUNCH</span>
+      <svg class="punch-cooldown-ring" viewBox="0 0 44 44" aria-hidden="true">
+        <circle class="punch-cooldown-track" cx="22" cy="22" r="18"/>
+        <circle class="punch-cooldown-fill" cx="22" cy="22" r="18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="pause-overlay" hidden>
+    <div class="pause-panel">
+      <p class="pause-kicker">TAKE A BREATH</p>
+      <h2>PAUSED</h2>
+      <button class="resume-button" type="button">Resume run</button>
+      <p class="pause-note">Stay in your lane. Collect coins. Choose the better gate.</p>
+    </div>
+  </div>
+  <div class="results-overlay" hidden>
+    <div class="results-panel">
+      <p class="results-kicker">RUN COMPLETE</p>
+      <h2>GAME OVER</h2>
+      <p class="results-reason"></p>
+      <div class="results-grid">
+        <div class="results-stat"><span>Distance</span><strong data-result="distance">0 m</strong></div>
+        <div class="results-stat"><span>Level</span><strong data-result="level">1</strong></div>
+        <div class="results-stat"><span>Coins</span><strong data-result="coins">0</strong></div>
+        <div class="results-stat"><span>Gates</span><strong data-result="gates">0</strong></div>
+        <div class="results-stat"><span>Enemies</span><strong data-result="enemies">0</strong></div>
+        <div class="results-stat"><span>Balance</span><strong data-result="balance">0</strong></div>
+      </div>
+      <button class="restart-button" type="button">Run again</button>
+      <p class="results-note">Lifetime coins keep raising the gate stakes.</p>
+    </div>
+  </div>
+`;
+
+export class Hud {
+  private readonly root: HTMLDivElement;
+  private readonly balanceValue: HTMLElement;
+  private readonly balancePill: HTMLElement;
+  private readonly levelName: HTMLElement;
+  private readonly levelZone: HTMLElement;
+  private readonly progressTrack: HTMLElement;
+  private readonly progressFill: HTMLElement;
+  private readonly progressValue: HTMLElement;
+  private readonly toast: HTMLElement;
+  private readonly zoneTransition: HTMLElement;
+  private readonly zoneTransitionName: HTMLElement;
+  private readonly pauseOverlay: HTMLElement;
+  private readonly resultsOverlay: HTMLElement;
+  private readonly resultsReason: HTMLElement;
+  private readonly pauseButton: HTMLButtonElement;
+  private readonly punchButton: HTMLButtonElement;
+  private readonly punchCooldownFill: SVGCircleElement;
+  private readonly powerupStrip: HTMLElement;
+  private readonly powerupChips = new Map<PowerUpType, HTMLElement>();
+  private readonly powerupBars = new Map<PowerUpType, HTMLElement>();
+  private readonly coinPops: HTMLSpanElement[] = [];
+  private coinPopIndex = 0;
+  private toastTimer = 0;
+  private balancePulseTimer = 0;
+  private lastLevelIndex = -1;
+  private lastProgress = -1;
+  private lastCooldownRatio = -1;
+
+  constructor(container: HTMLElement, callbacks: HudCallbacks) {
+    this.root = document.createElement('div');
+    this.root.className = 'hud';
+    this.root.innerHTML = TEMPLATE;
+    container.appendChild(this.root);
+
+    this.balanceValue = this.query('.balance-value');
+    this.balancePill = this.query('.balance-pill');
+    this.levelName = this.query('.level-name');
+    this.levelZone = this.query('.level-zone');
+    this.progressTrack = this.query('.progress-track');
+    this.progressFill = this.query('.progress-fill');
+    this.progressValue = this.query('.progress-value');
+    this.toast = this.query('.gate-toast');
+    this.zoneTransition = this.query('.zone-transition');
+    this.zoneTransitionName = this.query('.zone-transition-name');
+    this.pauseOverlay = this.query('.pause-overlay');
+    this.resultsOverlay = this.query('.results-overlay');
+    this.resultsReason = this.query('.results-reason');
+    this.pauseButton = this.query('.pause-button');
+    this.powerupStrip = this.query('.powerup-strip');
+
+    this.buildPowerUpChips();
+
+    this.punchButton = this.query<HTMLButtonElement>('.punch-button');
+    this.punchCooldownFill = this.root.querySelector(
+      '.punch-cooldown-fill',
+    ) as SVGCircleElement;
+
+    // Circumference of the cooldown ring (r=18 → c ≈ 113.1)
+    const CIRCUMFERENCE = 2 * Math.PI * 18;
+    this.punchCooldownFill.style.strokeDasharray = `${CIRCUMFERENCE}`;
+    this.punchCooldownFill.style.strokeDashoffset = '0';
+
+    this.pauseButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onPause();
+    });
+
+    this.punchButton.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      callbacks.onPunch();
+    });
+
+    const resumeButton = this.query<HTMLButtonElement>('.resume-button');
+    resumeButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onResume();
+    });
+
+    const restartButton = this.query<HTMLButtonElement>('.restart-button');
+    restartButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onRestart();
+    });
+  }
+
+  setBalance(balance: number, pulse = true): void {
+    this.balanceValue.textContent = Math.max(0, Math.round(balance)).toLocaleString('en-IN');
+
+    if (!pulse) return;
+
+    this.balancePill.classList.remove('is-pulsing');
+    void this.balancePill.offsetWidth;
+    this.balancePill.classList.add('is-pulsing');
+    window.clearTimeout(this.balancePulseTimer);
+    this.balancePulseTimer = window.setTimeout(() => {
+      this.balancePill.classList.remove('is-pulsing');
+    }, 240);
+  }
+
+  setLevel(level: LevelDefinition): void {
+    if (level.index === this.lastLevelIndex) return;
+    this.lastLevelIndex = level.index;
+    this.levelName.textContent = level.name;
+    this.levelZone.textContent = level.zone;
+  }
+
+  setProgress(progress: number): void {
+    const clamped = Math.max(0, Math.min(1, progress));
+    if (Math.abs(clamped - this.lastProgress) < 0.001) return;
+    this.lastProgress = clamped;
+
+    this.progressFill.style.transform = `scaleX(${clamped})`;
+    const percent = Math.floor(clamped * 100);
+    this.progressValue.textContent = `${percent}%`;
+    this.progressTrack.setAttribute('aria-valuenow', String(percent));
+  }
+
+  showHitPenalty(value: number, screenX: number, screenY: number): void {
+    let element = this.coinPops[this.coinPopIndex];
+
+    if (!element) {
+      element = document.createElement('span');
+      element.className = 'coin-pop';
+      this.root.appendChild(element);
+      this.coinPops.push(element);
+    }
+
+    this.coinPopIndex = (this.coinPopIndex + 1) % 8;
+    element.textContent = `-${Math.round(value)}`;
+    element.style.left = `${screenX}px`;
+    element.style.top = `${screenY}px`;
+    element.classList.remove('is-active', 'is-hit');
+    void element.offsetWidth;
+    element.classList.add('is-active', 'is-hit');
+  }
+
+  showCoinGain(value: number, screenX: number, screenY: number): void {
+    let element = this.coinPops[this.coinPopIndex];
+
+    if (!element) {
+      element = document.createElement('span');
+      element.className = 'coin-pop';
+      this.root.appendChild(element);
+      this.coinPops.push(element);
+    }
+
+    this.coinPopIndex = (this.coinPopIndex + 1) % 8;
+    element.textContent = `+${Math.round(value)}`;
+    element.style.left = `${screenX}px`;
+    element.style.top = `${screenY}px`;
+    element.classList.remove('is-active');
+    void element.offsetWidth;
+    element.classList.add('is-active');
+  }
+
+  showCalculation(text: string, positive: boolean): void {
+    this.toast.textContent = text;
+    this.toast.classList.remove('is-visible', 'is-positive', 'is-negative');
+    this.toast.classList.add(positive ? 'is-positive' : 'is-negative');
+    void this.toast.offsetWidth;
+    this.toast.classList.add('is-visible');
+
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      this.toast.classList.remove('is-visible');
+    }, 1900);
+  }
+
+  setZoneTransition(zoneName: string, active: boolean): void {
+    this.zoneTransitionName.textContent = zoneName;
+    this.zoneTransition.classList.toggle('is-active', active);
+  }
+
+  setPowerUps(states: readonly ActivePowerUpState[]): void {
+    const active = new Map(states.map((state) => [state.type, state]));
+    for (const type of POWERUP_TYPES) {
+      const chip = this.powerupChips.get(type);
+      const bar = this.powerupBars.get(type);
+      if (!chip || !bar) continue;
+
+      const state = active.get(type);
+      if (!state) {
+        chip.classList.remove('is-active');
+        chip.setAttribute('aria-hidden', 'true');
+        continue;
+      }
+
+      chip.classList.add('is-active');
+      chip.setAttribute('aria-hidden', 'false');
+      const ratio =
+        state.duration > 0
+          ? Math.max(0, Math.min(1, state.remaining / state.duration))
+          : 0;
+      bar.style.transform = `scaleX(${ratio})`;
+      chip.title = `${POWERUP_LABELS[type]} ${state.remaining.toFixed(1)}s`;
+    }
+  }
+
+  showPowerUp(type: PowerUpType): void {
+    this.toast.textContent = POWERUP_LABELS[type];
+    this.toast.classList.remove('is-visible', 'is-positive', 'is-negative');
+    this.toast.classList.add('is-positive');
+    void this.toast.offsetWidth;
+    this.toast.classList.add('is-visible');
+
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      this.toast.classList.remove('is-visible');
+    }, 1500);
+  }
+
+  showResults(results: RunResults): void {
+    this.resultsReason.textContent = results.reason;
+    this.resultsOverlay.querySelector('[data-result="distance"]')!.textContent =
+      `${Math.round(results.distance).toLocaleString('en-IN')} m`;
+    this.resultsOverlay.querySelector('[data-result="level"]')!.textContent =
+      String(results.level);
+    this.resultsOverlay.querySelector('[data-result="coins"]')!.textContent =
+      results.coinsCollected.toLocaleString('en-IN');
+    this.resultsOverlay.querySelector('[data-result="gates"]')!.textContent =
+      String(results.gatesPassed);
+    this.resultsOverlay.querySelector('[data-result="enemies"]')!.textContent =
+      String(results.enemiesDefeated);
+    this.resultsOverlay.querySelector('[data-result="balance"]')!.textContent =
+      results.finalBalance.toLocaleString('en-IN');
+    this.resultsOverlay.hidden = false;
+    this.root.classList.add('is-finished');
+  }
+
+  hideResults(): void {
+    this.resultsOverlay.hidden = true;
+    this.root.classList.remove('is-finished');
+  }
+
+  flashHit(): void {
+    this.root.classList.remove('is-hit-flash');
+    void this.root.offsetWidth;
+    this.root.classList.add('is-hit-flash');
+  }
+
+  setPaused(paused: boolean): void {
+    this.pauseOverlay.hidden = !paused;
+    this.root.classList.toggle('is-paused', paused);
+    this.pauseButton.setAttribute('aria-label', paused ? 'Game paused' : 'Pause game');
+  }
+
+  /**
+   * Update the Punch button cooldown ring.
+   * @param ratio  0 = ready, 1 = just punched (full cooldown).
+   */
+  setPunchCooldown(ratio: number): void {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    if (Math.abs(clamped - this.lastCooldownRatio) < 0.01) return;
+    this.lastCooldownRatio = clamped;
+
+    const CIRCUMFERENCE = 2 * Math.PI * 18;
+    this.punchCooldownFill.style.strokeDashoffset = String(
+      CIRCUMFERENCE * (1 - clamped),
+    );
+    this.punchButton.classList.toggle('is-ready', clamped === 0);
+    this.punchButton.disabled = clamped > 0;
+  }
+
+  /** Show a floating reward amount at a screen position (enemy defeated). */
+  showEnemyReward(value: number, screenX: number, screenY: number): void {
+    let element = this.coinPops[this.coinPopIndex];
+
+    if (!element) {
+      element = document.createElement('span');
+      element.className = 'coin-pop';
+      this.root.appendChild(element);
+      this.coinPops.push(element);
+    }
+
+    this.coinPopIndex = (this.coinPopIndex + 1) % 8;
+    element.textContent = `+${Math.round(value)}`;
+    element.style.left = `${screenX}px`;
+    element.style.top = `${screenY}px`;
+    element.classList.remove('is-active', 'is-hit', 'is-reward');
+    void element.offsetWidth;
+    element.classList.add('is-active', 'is-reward');
+  }
+
+  private buildPowerUpChips(): void {
+    for (const type of POWERUP_TYPES) {
+      const chip = document.createElement('div');
+      chip.className = 'powerup-chip';
+      chip.dataset.powerup = type;
+      chip.setAttribute('aria-hidden', 'true');
+
+      const label = document.createElement('span');
+      label.className = 'powerup-label';
+      label.textContent = POWERUP_LABELS[type];
+
+      const track = document.createElement('span');
+      track.className = 'powerup-track';
+      const bar = document.createElement('span');
+      bar.className = 'powerup-bar';
+      track.appendChild(bar);
+
+      chip.append(label, track);
+      this.powerupStrip.appendChild(chip);
+      this.powerupChips.set(type, chip);
+      this.powerupBars.set(type, bar);
+    }
+  }
+
+  dispose(): void {
+    window.clearTimeout(this.toastTimer);
+    window.clearTimeout(this.balancePulseTimer);
+    this.root.remove();
+  }
+
+  private query<T extends HTMLElement = HTMLElement>(selector: string): T {
+    const element = this.root.querySelector<T>(selector);
+    if (!element) {
+      throw new Error(`HUD element not found: ${selector}`);
+    }
+    return element;
+  }
+}
