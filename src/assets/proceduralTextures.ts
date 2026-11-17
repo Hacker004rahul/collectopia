@@ -113,7 +113,7 @@ export function createAsphaltTexture(): THREE.CanvasTexture {
   const { canvas, ctx } = makeCanvas(512, 512);
   const random = seeded(0xa5fa17);
 
-  ctx.fillStyle = '#3d4249';
+  ctx.fillStyle = '#252d38';
   ctx.fillRect(0, 0, 512, 512);
 
   addGrain(ctx, random, 512, 512, 5600, 0.025, 0.13);
@@ -134,7 +134,7 @@ export function createAsphaltTexture(): THREE.CanvasTexture {
     const y = random() * 512;
     const width = 24 + random() * 100;
     const height = 12 + random() * 48;
-    ctx.fillStyle = `rgba(88, 91, 94, ${0.06 + random() * 0.08})`;
+    ctx.fillStyle = `rgba(126, 137, 149, ${0.07 + random() * 0.09})`;
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, 5);
     ctx.fill();
@@ -572,6 +572,7 @@ export function createGlowTexture(): THREE.CanvasTexture {
 }
 
 const gateTextureCache = new Map<string, THREE.CanvasTexture>();
+let gateGlowTexture: THREE.CanvasTexture | undefined;
 
 function roundedRect(
   ctx: CanvasRenderingContext2D,
@@ -595,12 +596,20 @@ function roundedRect(
   ctx.closePath();
 }
 
-function colorWithAlpha(hex: string, alpha: number): string {
-  const value = hex.replace('#', '');
-  const red = Number.parseInt(value.slice(0, 2), 16);
-  const green = Number.parseInt(value.slice(2, 4), 16);
-  const blue = Number.parseInt(value.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+export function createGateGlowTexture(): THREE.CanvasTexture {
+  if (gateGlowTexture) return gateGlowTexture;
+
+  const width = 768;
+  const height = 480;
+  const { canvas, ctx } = makeCanvas(width, height);
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 44;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+  roundedRect(ctx, 52, 38, width - 104, height - 76, 30);
+  ctx.fill();
+
+  gateGlowTexture = canvasTexture(canvas, { clamp: true });
+  return gateGlowTexture;
 }
 
 export function createGateTexture(spec: GateSpec): THREE.CanvasTexture {
@@ -608,180 +617,77 @@ export function createGateTexture(spec: GateSpec): THREE.CanvasTexture {
   const cached = gateTextureCache.get(cacheKey);
   if (cached) return cached;
 
-  const width = 512;
-  const height = 300;
+  const width = 768;
+  const height = 480;
   const { canvas, ctx } = makeCanvas(width, height);
 
-  const panelX = 10;
-  const panelY = 10;
-  const panelWidth = width - 20;
-  const panelHeight = height - 20;
-  const panelRadius = 30;
-
+  roundedRect(ctx, 5, 5, width - 10, height - 10, 34);
   ctx.save();
-  roundedRect(ctx, panelX, panelY, panelWidth, panelHeight, panelRadius);
   ctx.clip();
 
-  const glass = ctx.createLinearGradient(0, panelY, 0, height - panelY);
-  glass.addColorStop(0, '#223047');
-  glass.addColorStop(0.48, '#111a2a');
-  glass.addColorStop(1, '#070b13');
-  ctx.fillStyle = glass;
+  const background = ctx.createLinearGradient(0, 0, 0, height);
+  background.addColorStop(0, 'rgba(29, 43, 52, 0.93)');
+  background.addColorStop(0.55, 'rgba(16, 27, 35, 0.91)');
+  background.addColorStop(1, 'rgba(9, 17, 24, 0.94)');
+  ctx.fillStyle = background;
   ctx.fillRect(0, 0, width, height);
 
-  const glow = ctx.createRadialGradient(
+  const colorBloom = ctx.createRadialGradient(
     width / 2,
-    176,
-    8,
+    height / 2,
+    12,
     width / 2,
-    176,
-    208,
+    height / 2,
+    width * 0.62,
   );
-  glow.addColorStop(0, colorWithAlpha(spec.color, 0.3));
-  glow.addColorStop(0.52, colorWithAlpha(spec.color, 0.08));
-  glow.addColorStop(1, colorWithAlpha(spec.color, 0));
-  ctx.fillStyle = glow;
+  colorBloom.addColorStop(0, spec.color);
+  colorBloom.addColorStop(0.35, spec.color);
+  colorBloom.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = colorBloom;
   ctx.fillRect(0, 0, width, height);
+  ctx.globalAlpha = 1;
 
-  const sheen = ctx.createLinearGradient(36, 18, 460, 282);
-  sheen.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
-  sheen.addColorStop(0.32, 'rgba(255, 255, 255, 0.035)');
-  sheen.addColorStop(0.68, 'rgba(255, 255, 255, 0)');
-  sheen.addColorStop(1, 'rgba(255, 255, 255, 0.07)');
-  ctx.fillStyle = sheen;
+  const reflection = ctx.createLinearGradient(0, 0, width * 0.85, height * 0.6);
+  reflection.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+  reflection.addColorStop(0.42, 'rgba(255, 255, 255, 0.035)');
+  reflection.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = reflection;
   ctx.fillRect(0, 0, width, height);
-
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.beginPath();
-  ctx.moveTo(44, 18);
-  ctx.lineTo(148, 18);
-  ctx.lineTo(72, 284);
-  ctx.lineTo(18, 284);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
-  ctx.fillRect(18, 260, width - 36, 32);
-  ctx.restore();
-
-  const outerTrim = ctx.createLinearGradient(0, 0, width, height);
-  outerTrim.addColorStop(0, '#fff0c7');
-  outerTrim.addColorStop(0.24, '#d8bf8a');
-  outerTrim.addColorStop(0.55, '#a98045');
-  outerTrim.addColorStop(0.78, '#f3dda8');
-  outerTrim.addColorStop(1, '#8b6434');
-
-  roundedRect(ctx, 11, 11, width - 22, height - 22, 29);
-  ctx.strokeStyle = 'rgba(5, 8, 14, 0.9)';
-  ctx.lineWidth = 7;
-  ctx.stroke();
-
-  roundedRect(ctx, 15, 15, width - 30, height - 30, 26);
-  ctx.strokeStyle = outerTrim;
-  ctx.lineWidth = 4;
-  ctx.stroke();
-
-  roundedRect(ctx, 20, 20, width - 40, height - 40, 22);
-  ctx.strokeStyle = 'rgba(255, 243, 205, 0.62)';
-  ctx.lineWidth = 1.4;
-  ctx.stroke();
-
-  roundedRect(ctx, 25, 25, width - 50, height - 50, 19);
-  ctx.strokeStyle = colorWithAlpha(spec.color, 0.72);
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.strokeStyle = colorWithAlpha(spec.color, 0.25);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(38, 88);
-  ctx.lineTo(width - 38, 88);
-  ctx.stroke();
-
-  for (const [studX, studY] of [
-    [32, 32],
-    [width - 32, 32],
-    [32, height - 32],
-    [width - 32, height - 32],
-  ] as const) {
-    const stud = ctx.createRadialGradient(
-      studX - 1,
-      studY - 1,
-      0,
-      studX,
-      studY,
-      5,
-    );
-    stud.addColorStop(0, '#fff6d8');
-    stud.addColorStop(0.5, '#c9a768');
-    stud.addColorStop(1, '#6f4f26');
-    ctx.fillStyle = stud;
-    ctx.beginPath();
-    ctx.arc(studX, studY, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f6fff9';
+  ctx.shadowColor = spec.color;
+  ctx.shadowBlur = 38;
+  let fontSize = 190;
+  ctx.font = `800 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+  const value = `${spec.symbol}${spec.value}`;
+  while (ctx.measureText(value).width > width - 150 && fontSize > 120) {
+    fontSize -= 8;
+    ctx.font = `800 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+  }
+  ctx.fillText(value, width / 2, height / 2);
+  ctx.shadowBlur = 0;
 
-  ctx.beginPath();
-  ctx.arc(width / 2, 57, 24, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(5, 9, 16, 0.6)';
-  ctx.fill();
-  ctx.strokeStyle = colorWithAlpha(spec.color, 0.85);
+  ctx.restore();
+  roundedRect(ctx, 5, 5, width - 10, height - 10, 34);
+  ctx.strokeStyle = spec.color;
+  ctx.globalAlpha = 0.82;
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  roundedRect(ctx, 12, 12, width - 24, height - 24, 30);
+  ctx.strokeStyle = spec.color;
+  ctx.globalAlpha = 0.3;
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255, 238, 191, 0.52)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(width / 2, 57, 20, 0, Math.PI * 2);
+  roundedRect(ctx, 15, 15, width - 30, height - 30, 28);
+  ctx.strokeStyle = 'rgba(226, 241, 245, 0.22)';
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.fillStyle = spec.color;
-  ctx.font = '800 25px "Segoe UI", system-ui, sans-serif';
-  ctx.shadowColor = colorWithAlpha(spec.color, 0.75);
-  ctx.shadowBlur = 12;
-  ctx.fillText(spec.symbol, width / 2, 58);
-  ctx.shadowBlur = 0;
-
-  const valueGradient = ctx.createLinearGradient(0, 98, 0, 238);
-  valueGradient.addColorStop(0, '#ffffff');
-  valueGradient.addColorStop(0.58, '#f8f2e4');
-  valueGradient.addColorStop(1, spec.color);
-  ctx.fillStyle = valueGradient;
-  ctx.shadowColor = colorWithAlpha(spec.color, 0.62);
-  ctx.shadowBlur = 22;
-  ctx.shadowOffsetY = 4;
-
-  let fontSize = 124;
-  const value = `${spec.symbol}${spec.value}`;
-  do {
-    ctx.font = `900 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
-    fontSize -= 6;
-  } while (ctx.measureText(value).width > 414 && fontSize > 76);
-  ctx.fillText(value, width / 2, 174);
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-
-  ctx.strokeStyle = 'rgba(255, 236, 184, 0.55)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(178, 244);
-  ctx.lineTo(236, 244);
-  ctx.moveTo(width - 178, 244);
-  ctx.lineTo(width - 236, 244);
-  ctx.stroke();
-
-  ctx.fillStyle = colorWithAlpha(spec.color, 0.9);
-  ctx.beginPath();
-  ctx.moveTo(width / 2, 237);
-  ctx.lineTo(width / 2 + 7, 244);
-  ctx.lineTo(width / 2, 251);
-  ctx.lineTo(width / 2 - 7, 244);
-  ctx.closePath();
-  ctx.fill();
-
-  const texture = canvasTexture(canvas, { clamp: true });
+  const texture = canvasTexture(canvas, { clamp: true, anisotropy: 8 });
   gateTextureCache.set(cacheKey, texture);
   return texture;
 }

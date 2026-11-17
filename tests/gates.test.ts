@@ -43,6 +43,10 @@ describe('gate math', () => {
     expect(formatGate(GATE_SPECS.add)).toBe('+100');
     expect(formatGate(GATE_SPECS.subtract)).toBe('−50');
     expect(formatGate(GATE_SPECS.multiply)).toBe('×2');
+    expect(GATE_SPECS.add.color).toBe('#2fbf83');
+    expect(GATE_SPECS.subtract.color).toBe('#e0445e');
+    expect(GATE_SPECS.multiply.color).toBe('#00a86b');
+    expect(GATE_SPECS.divide.color).toBe('#3b82f6');
     expect(formatGate(GATE_SPECS.divide)).toBe('÷2');
     expect(formatGateCalculation(100, GATE_SPECS.subtract, 50)).toBe(
       '100 − 50 = 50',

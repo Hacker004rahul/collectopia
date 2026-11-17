@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LANES, PLAYER, STARTING_LANE } from '../config/balance';
+import { LANES, PLAYER, PUNCH, STARTING_LANE } from '../config/balance';
 
 interface Limb {
   pivot: THREE.Group;
@@ -12,9 +12,18 @@ export class Player {
   private readonly model = new THREE.Group();
   private readonly legs: Limb[] = [];
   private readonly arms: Limb[] = [];
+  private readonly punchGlowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd79a,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
   private laneIndexValue: number = STARTING_LANE;
   private targetX: number = LANES[STARTING_LANE];
   private currentX: number = LANES[STARTING_LANE];
+  private punchTimer = 0;
+  private punchGlow: THREE.Mesh | null = null;
 
   constructor() {
     this.group.add(this.model);
@@ -44,13 +53,21 @@ export class Player {
     this.targetX = LANES[next];
   }
 
+  punch(): void {
+    this.punchTimer = PUNCH.animDuration;
+  }
+
   reset(): void {
     this.laneIndexValue = STARTING_LANE;
     this.targetX = LANES[STARTING_LANE];
     this.currentX = LANES[STARTING_LANE];
+    this.punchTimer = 0;
+    this.punchGlowMaterial.opacity = 0;
+    if (this.punchGlow) this.punchGlow.visible = false;
     this.group.position.set(this.currentX, 0, 0);
     this.group.rotation.set(0, 0, 0);
     this.model.position.y = 0;
+    this.model.rotation.y = 0;
   }
 
   update(dt: number, time: number, distance: number, speed: number): void {
@@ -72,6 +89,68 @@ export class Player {
     }
     for (const arm of this.arms) {
       arm.pivot.rotation.x = Math.sin(phase + arm.phaseOffset) * 0.72;
+    }
+
+    if (this.punchTimer > 0) {
+      this.punchTimer = Math.max(0, this.punchTimer - dt);
+      const progress = 1 - this.punchTimer / PUNCH.animDuration;
+      const pose =
+        progress < 0.3
+          ? THREE.MathUtils.smoothstep(progress / 0.3, 0, 1)
+          : 1 - THREE.MathUtils.smoothstep((progress - 0.3) / 0.7, 0, 1);
+      const rightArm = this.arms[1].pivot;
+      rightArm.rotation.x = THREE.MathUtils.lerp(
+        rightArm.rotation.x,
+        1.8,
+        pose,
+      );
+      rightArm.rotation.z = THREE.MathUtils.lerp(
+        rightArm.rotation.z,
+        0.45,
+        pose,
+      );
+      const leftArm = this.arms[0].pivot;
+      leftArm.rotation.x = THREE.MathUtils.lerp(
+        leftArm.rotation.x,
+        -0.35,
+        pose * 0.6,
+      );
+      leftArm.rotation.z = THREE.MathUtils.lerp(
+        leftArm.rotation.z,
+        -0.18,
+        pose * 0.6,
+      );
+      this.model.rotation.y = THREE.MathUtils.lerp(
+        this.model.rotation.y,
+        -0.22,
+        pose,
+      );
+      if (this.punchGlow) {
+        this.punchGlow.visible = pose > 0.02;
+        this.punchGlow.scale.setScalar(0.55 + pose * 0.8);
+      }
+      this.punchGlowMaterial.opacity = pose * 0.45;
+    } else {
+      this.arms[1].pivot.rotation.z = THREE.MathUtils.damp(
+        this.arms[1].pivot.rotation.z,
+        0,
+        18,
+        dt,
+      );
+      this.arms[0].pivot.rotation.z = THREE.MathUtils.damp(
+        this.arms[0].pivot.rotation.z,
+        0,
+        18,
+        dt,
+      );
+      this.model.rotation.y = THREE.MathUtils.damp(
+        this.model.rotation.y,
+        0,
+        14,
+        dt,
+      );
+      this.punchGlowMaterial.opacity = 0;
+      if (this.punchGlow) this.punchGlow.visible = false;
     }
 
     this.model.position.y = Math.abs(Math.sin(phase)) * 0.055;
@@ -181,6 +260,17 @@ export class Player {
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 8), skin);
       hand.position.y = -0.43;
       this.addShadowed(hand, armPivot);
+
+      if (side === 1) {
+        const glow = new THREE.Mesh(
+          new THREE.SphereGeometry(0.13, 10, 8),
+          this.punchGlowMaterial,
+        );
+        glow.position.y = -0.43;
+        glow.visible = false;
+        armPivot.add(glow);
+        this.punchGlow = glow;
+      }
 
       this.arms.push({ pivot: armPivot, phaseOffset: side === 1 ? 0 : Math.PI });
     }

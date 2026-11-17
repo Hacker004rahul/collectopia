@@ -33,7 +33,10 @@ const TEMPLATE = `
     <div class="hud-stats">
       <div class="balance-pill">
         <span class="coin-icon" aria-hidden="true"></span>
-        <span class="balance-value">0</span>
+        <span class="balance-copy">
+          <span class="balance-label">COINS</span>
+          <span class="balance-value">0</span>
+        </span>
       </div>
       <button class="pause-button" type="button" aria-label="Pause game">
         <span></span><span></span>
@@ -436,7 +439,8 @@ export class Hud {
    */
   setPunchCooldown(ratio: number): void {
     const clamped = Math.max(0, Math.min(1, ratio));
-    if (Math.abs(clamped - this.lastCooldownRatio) < 0.01) return;
+    const readinessChanged = (clamped === 0) !== (this.lastCooldownRatio === 0);
+    if (Math.abs(clamped - this.lastCooldownRatio) < 0.01 && !readinessChanged) return;
     this.lastCooldownRatio = clamped;
 
     const CIRCUMFERENCE = 2 * Math.PI * 18;

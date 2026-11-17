@@ -13,7 +13,7 @@
  *  - Scale difficulty with the current level index (faster, denser, tougher).
  */
 import * as THREE from 'three';
-import { ENEMIES, LANES, PLAYER } from '../config/balance';
+import { ENEMIES, LANES, PLAYER, PUNCH } from '../config/balance';
 import {
   getDifficultyProfile,
   pickWeighted,
@@ -94,6 +94,20 @@ const HP: Record<EnemyKind, number> = {
 };
 
 const DEFEAT_FLASH_DURATION = 0.4;
+
+export function isEnemyInPunchRange(
+  playerZ: number,
+  playerX: number,
+  enemyDistance: number,
+  enemyX: number,
+): boolean {
+  const forwardDistance = playerZ + enemyDistance;
+  return (
+    forwardDistance >= -0.25 &&
+    forwardDistance <= PUNCH.rangeZ &&
+    Math.abs(playerX - enemyX) <= PUNCH.rangeX
+  );
+}
 
 // ─── EnemySystem ──────────────────────────────────────────────────────────────
 
@@ -310,13 +324,7 @@ export class EnemySystem {
       if (!rec.active || rec.hp <= 0) continue;
 
       const ez = -rec.distance;
-      const dz = playerZ - ez;    // positive: enemy is ahead
-      const dx = Math.abs(playerX - rec.x);
-
-      // Enemy must be ahead of the player and within punch range.
-      // Never let the punch hit enemies behind the player.
-      if (dz < -0.25 || dz > PUNCH_RANGE_Z_FORWARD) continue;
-      if (dx > PUNCH_RANGE_X) continue;
+      if (!isEnemyInPunchRange(playerZ, playerX, rec.distance, rec.x)) continue;
 
       const damage = superPunch ? 2 : 1;
       rec.hp = Math.max(0, rec.hp - damage);
@@ -535,12 +543,6 @@ export class EnemySystem {
     mat.emissive.setRGB(r / 255, gv / 255, 0x22 / 255);
   }
 }
-
-// ─── punch range constants (match PUNCH in balance.ts) ───────────────────────
-// Imported here rather than from balance to avoid a circular-dep risk; values
-// must stay in sync with PUNCH.rangeZ and PUNCH.rangeX in balance.ts.
-const PUNCH_RANGE_Z_FORWARD = 4.5;   // matches PUNCH.rangeZ
-const PUNCH_RANGE_X = 2.4;           // matches PUNCH.rangeX
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

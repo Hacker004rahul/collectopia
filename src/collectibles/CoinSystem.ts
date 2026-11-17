@@ -30,6 +30,7 @@ export interface CoinSystemCallbacks {
 export class CoinSystem {
   private readonly body: THREE.InstancedMesh;
   private readonly rim: THREE.InstancedMesh;
+  private readonly crest: THREE.InstancedMesh;
   private readonly glow: THREE.Points;
   private readonly glowPositions: Float32Array;
   private readonly records: Array<CoinRecord | null> = new Array(COINS.maxActive).fill(null);
@@ -52,16 +53,16 @@ export class CoinSystem {
       COINS.radius,
       COINS.radius,
       0.075,
-      24,
+      32,
     );
     bodyGeometry.rotateX(Math.PI / 2);
 
     const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffcf3d,
-      metalness: 0.38,
-      roughness: 0.24,
-      emissive: 0x8a5600,
-      emissiveIntensity: 0.5,
+      color: 0xffc936,
+      metalness: 0.58,
+      roughness: 0.28,
+      emissive: 0x704300,
+      emissiveIntensity: 0.22,
     });
 
     this.body = new THREE.InstancedMesh(bodyGeometry, bodyMaterial, COINS.maxActive);
@@ -69,18 +70,44 @@ export class CoinSystem {
     this.body.frustumCulled = false;
     this.body.castShadow = true;
 
-    const rimGeometry = new THREE.TorusGeometry(COINS.radius, 0.035, 8, 24);
+    const rimGeometry = new THREE.TorusGeometry(COINS.radius * 0.86, 0.045, 10, 32);
     const rimMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffb92e,
-      metalness: 0.45,
-      roughness: 0.3,
-      emissive: 0x704400,
-      emissiveIntensity: 0.35,
+      color: 0xffe083,
+      metalness: 0.62,
+      roughness: 0.24,
+      emissive: 0x6a4200,
+      emissiveIntensity: 0.16,
     });
 
     this.rim = new THREE.InstancedMesh(rimGeometry, rimMaterial, COINS.maxActive);
     this.rim.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rim.frustumCulled = false;
+
+    const crestShape = new THREE.Shape();
+    const outerRadius = COINS.radius * 0.38;
+    const innerRadius = outerRadius * 0.48;
+    for (let point = 0; point < 10; point += 1) {
+      const angle = point * Math.PI / 5 - Math.PI / 2;
+      const radius = point % 2 === 0 ? outerRadius : innerRadius;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (point === 0) crestShape.moveTo(x, y);
+      else crestShape.lineTo(x, y);
+    }
+    crestShape.closePath();
+
+    this.crest = new THREE.InstancedMesh(
+      new THREE.ShapeGeometry(crestShape),
+      new THREE.MeshStandardMaterial({
+        color: 0x9a5c08,
+        metalness: 0.48,
+        roughness: 0.34,
+        side: THREE.DoubleSide,
+      }),
+      COINS.maxActive,
+    );
+    this.crest.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.crest.frustumCulled = false;
 
     this.glowPositions = new Float32Array(COINS.maxActive * 3);
     const glowGeometry = new THREE.BufferGeometry();
@@ -95,25 +122,27 @@ export class CoinSystem {
       new THREE.PointsMaterial({
         map: createGlowTexture(),
         color: 0xffffff,
-        size: 1.05,
+        size: 0.72,
         transparent: true,
-        opacity: 0.72,
+        opacity: 0.32,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
         sizeAttenuation: true,
       }),
     );
     this.glow.frustumCulled = false;
 
-    scene.add(this.body, this.rim, this.glow);
+    scene.add(this.body, this.rim, this.crest, this.glow);
 
     for (let index = COINS.maxActive - 1; index >= 0; index -= 1) {
       this.freeIndices.push(index);
       this.body.setMatrixAt(index, this.hiddenMatrix);
       this.rim.setMatrixAt(index, this.hiddenMatrix);
+      this.crest.setMatrixAt(index, this.hiddenMatrix);
     }
     this.body.instanceMatrix.needsUpdate = true;
     this.rim.instanceMatrix.needsUpdate = true;
+    this.crest.instanceMatrix.needsUpdate = true;
   }
 
   update(
@@ -182,6 +211,7 @@ export class CoinSystem {
       if (record.collected || record.distance < playerDistance - COINS.recycleBehind) {
         this.body.setMatrixAt(record.index, this.hiddenMatrix);
         this.rim.setMatrixAt(record.index, this.hiddenMatrix);
+        this.crest.setMatrixAt(record.index, this.hiddenMatrix);
         this.freeIndices.push(record.index);
         this.records[i] = null;
         continue;
@@ -197,6 +227,12 @@ export class CoinSystem {
       this.matrix.setPosition(x, y, z);
       this.body.setMatrixAt(record.index, this.matrix);
       this.rim.setMatrixAt(record.index, this.matrix);
+      this.matrix.setPosition(
+        x + Math.sin(angle) * 0.041,
+        y,
+        z + Math.cos(angle) * 0.041,
+      );
+      this.crest.setMatrixAt(record.index, this.matrix);
 
       const offset = glowCount * 3;
       this.glowPositions[offset] = x;
@@ -207,6 +243,7 @@ export class CoinSystem {
 
     this.body.instanceMatrix.needsUpdate = true;
     this.rim.instanceMatrix.needsUpdate = true;
+    this.crest.instanceMatrix.needsUpdate = true;
 
     const glowGeometry = this.glow.geometry;
     glowGeometry.setDrawRange(0, glowCount);
@@ -227,6 +264,7 @@ export class CoinSystem {
       if (!record) continue;
       this.body.setMatrixAt(record.index, this.hiddenMatrix);
       this.rim.setMatrixAt(record.index, this.hiddenMatrix);
+      this.crest.setMatrixAt(record.index, this.hiddenMatrix);
     }
     this.records.fill(null);
     this.freeIndices.length = 0;
@@ -235,6 +273,7 @@ export class CoinSystem {
     }
     this.body.instanceMatrix.needsUpdate = true;
     this.rim.instanceMatrix.needsUpdate = true;
+    this.crest.instanceMatrix.needsUpdate = true;
     this.glow.geometry.setDrawRange(0, 0);
     this.rng = new Rng(0x51c0ffee);
     this.nextId = 1;
@@ -244,12 +283,14 @@ export class CoinSystem {
   }
 
   dispose(): void {
-    this.scene.remove(this.body, this.rim, this.glow);
+    this.scene.remove(this.body, this.rim, this.crest, this.glow);
     this.body.geometry.dispose();
     this.rim.geometry.dispose();
+    this.crest.geometry.dispose();
     this.glow.geometry.dispose();
     (this.body.material as THREE.Material).dispose();
     (this.rim.material as THREE.Material).dispose();
+    (this.crest.material as THREE.Material).dispose();
     (this.glow.material as THREE.Material).dispose();
   }
 
@@ -327,6 +368,12 @@ export class CoinSystem {
     this.matrix.setPosition(x, COINS.height, -distance);
     this.body.setMatrixAt(index, this.matrix);
     this.rim.setMatrixAt(index, this.matrix);
+    this.matrix.setPosition(
+      x + Math.sin(record.phase) * 0.041,
+      COINS.height,
+      -distance + Math.cos(record.phase) * 0.041,
+    );
+    this.crest.setMatrixAt(index, this.matrix);
     return true;
   }
 }

@@ -7,10 +7,9 @@
  *  - Delegation to EnemySystem.punch() for hit detection.
  *  - Callbacks for hit and miss feedback.
  *
- * The Player model does not have a dedicated punch animation bone, so the
- * system rotates the right arm pivot forward on the Player group for the
- * duration of the animation.  This is entirely cosmetic and reverts
- * automatically; it does not affect steering or other gameplay.
+ * The accepted-punch callbacks drive the Player's right-arm animation. This is
+ * entirely cosmetic and reverts automatically; it does not affect steering or
+ * other gameplay.
  */
 import { PUNCH } from '../config/balance';
 import type { EnemySystem } from './EnemySystem';

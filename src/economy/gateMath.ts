@@ -25,7 +25,7 @@ const OPERATION_SYMBOL: Record<GateOperation, string> = {
 const OPERATION_COLOR: Record<GateOperation, string> = {
   add: '#2fbf83',
   subtract: '#e0445e',
-  multiply: '#8b5cf6',
+  multiply: '#00a86b',
   divide: '#3b82f6',
 };
 

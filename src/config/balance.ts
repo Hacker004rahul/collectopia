@@ -130,10 +130,10 @@ export const ENEMIES = {
 export const PUNCH = {
   /** Cooldown between consecutive punches (s). */
   cooldown: 1.0,
-  /** Forward range from player centre — enemies within this distance can be hit (m). */
-  rangeZ: 4.5,
-  /** Lateral range — enemy must be within this X distance of the player (m). */
-  rangeX: 2.4,
+  /** Forward range from player centre, long enough for an approaching enemy (m). */
+  rangeZ: 12,
+  /** Lateral range includes adjacent lanes while still excluding distant lanes (m). */
+  rangeX: 3.2,
   /** Duration of the player punch animation (s). */
   animDuration: 0.28,
 } as const;

@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EconomyManager } from '../src/economy/EconomyManager';
 import { ENEMIES, PUNCH, LANES } from '../src/config/balance';
 import { ENEMY_HALF_EXTENTS, ENEMY_MAX_HP } from '../src/enemies/EnemyMeshBuilder';
+import { isEnemyInPunchRange } from '../src/enemies/EnemySystem';
 import { PunchSystem } from '../src/enemies/PunchSystem';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -111,6 +112,16 @@ describe('PUNCH config', () => {
 
   it('animDuration is shorter than cooldown', () => {
     expect(PUNCH.animDuration).toBeLessThan(PUNCH.cooldown);
+  });
+
+  it('covers an approaching enemy in an adjacent lane', () => {
+    expect(isEnemyInPunchRange(-100, 0, 112, 2.7)).toBe(true);
+  });
+
+  it('does not hit enemies behind the player or outside the reach', () => {
+    expect(isEnemyInPunchRange(-100, 0, 99.5, 0)).toBe(false);
+    expect(isEnemyInPunchRange(-100, 0, 112.1, 0)).toBe(false);
+    expect(isEnemyInPunchRange(-100, 0, 105, 3.21)).toBe(false);
   });
 });
 

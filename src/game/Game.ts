@@ -173,9 +173,11 @@ export class Game {
 
     this.punch = new PunchSystem(this.enemies, {
       onHit: (_superPunch) => {
+        this.player.punch();
         this.audio.punchHit();
       },
       onMiss: () => {
+        this.player.punch();
         this.audio.punchMiss();
       },
     });
