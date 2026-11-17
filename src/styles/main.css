@@ -214,6 +214,15 @@ body {
   background: rgba(30, 42, 60, 0.82);
 }
 
+.pause-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.pause-button:disabled:active {
+  transform: none;
+}
+
 .level-row {
   position: relative;
   z-index: 1;
@@ -351,30 +360,101 @@ body {
   border-color: rgba(255, 107, 107, 0.36);
 }
 
-.hint {
-  position: relative;
-  z-index: 1;
+.tutorial-hint {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  left: calc(14px + env(safe-area-inset-left));
+  z-index: 3;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 3px;
-  margin-top: auto;
-  padding-bottom: calc(4px + env(safe-area-inset-bottom));
-  font-size: 11px;
+  width: max-content;
+  max-width: min(
+    250px,
+    calc(
+      100% - 132px - env(safe-area-inset-left) - env(safe-area-inset-right)
+    )
+  );
+  padding: 8px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(7, 12, 20, 0.52);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 10.5px;
+  line-height: 1.35;
   letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.58);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
-  /* leave room for punch button on the right */
-  padding-right: 88px;
+  color: rgba(255, 255, 255, 0.64);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 260ms ease, transform 260ms ease;
 }
 
-.hint-keys {
+.tutorial-hint[hidden] {
+  display: none;
+}
+
+.tutorial-hint.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.tutorial-keys {
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.42);
 }
 
-.hud.is-paused .hint {
-  opacity: 0.35;
+.start-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  z-index: 4;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.start-prompt[hidden] {
+  display: none;
+}
+
+.start-button {
+  pointer-events: auto;
+  min-width: 132px;
+  padding: 13px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffe39a 0%, #ffc33d 55%, #ef9e24 100%);
+  color: #2a1b00;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.34),
+    0 0 24px rgba(255, 184, 48, 0.2);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.start-button:hover {
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.38),
+    0 0 30px rgba(255, 184, 48, 0.28);
+}
+
+.start-button:active {
+  transform: scale(0.96);
+}
+
+.start-button:focus-visible {
+  outline: 2px solid rgba(255, 227, 154, 0.9);
+  outline-offset: 3px;
 }
 
 .pause-overlay {
@@ -479,11 +559,11 @@ body {
     min-width: 64px;
   }
 
-  .hint {
+  .tutorial-hint {
     font-size: 10px;
   }
 
-  .hint-keys {
+  .tutorial-keys {
     display: none;
   }
 }
@@ -494,12 +574,20 @@ body {
     padding-right: 24px;
   }
 
-  .hint {
-    font-size: 12px;
+  .tutorial-hint {
+    left: calc(24px + env(safe-area-inset-left));
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    max-width: min(
+      300px,
+      calc(
+        100% - 148px - env(safe-area-inset-left) - env(safe-area-inset-right)
+      )
+    );
+    font-size: 11.5px;
   }
 
-  .hint-keys {
-    font-size: 10px;
+  .tutorial-keys {
+    font-size: 9.5px;
   }
 }
 
@@ -586,8 +674,18 @@ body {
     0 12px 32px rgba(0, 0, 0, 0.44),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.18s ease;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.hud:not(.is-started) .punch-button {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .punch-button.is-ready {
@@ -613,8 +711,15 @@ body {
 }
 
 .punch-icon {
-  font-size: 24px;
-  line-height: 1;
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+  fill: none;
+  stroke: #ffd6ca;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
   pointer-events: none;
 }
 
@@ -666,7 +771,8 @@ body {
   }
 
   .punch-icon {
-    font-size: 20px;
+    width: 22px;
+    height: 22px;
   }
 
   .punch-label {
@@ -681,7 +787,8 @@ body {
   }
 
   .punch-icon {
-    font-size: 28px;
+    width: 30px;
+    height: 30px;
   }
 }
 

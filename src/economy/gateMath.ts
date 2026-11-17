@@ -23,10 +23,10 @@ const OPERATION_SYMBOL: Record<GateOperation, string> = {
 };
 
 const OPERATION_COLOR: Record<GateOperation, string> = {
-  add: '#37e19a',
-  subtract: '#ff6b6b',
-  multiply: '#ffc94a',
-  divide: '#5bc0ff',
+  add: '#2fbf83',
+  subtract: '#e0445e',
+  multiply: '#8b5cf6',
+  divide: '#3b82f6',
 };
 
 function spec(

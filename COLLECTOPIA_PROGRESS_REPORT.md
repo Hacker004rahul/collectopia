@@ -466,7 +466,7 @@ All other ad formats (`hoarding`, `led-screen`, `building-board`, `shopfront-boa
 - **Spawn fairness:** a shared reservation system keeps gates, obstacles, enemies and power-ups from occupying the same lane corridor.
 - **Dynamic gates:** seven variants are now available (`+100`, `−50`, `−100`, `×1`, `×2`, `÷2`, `÷4`). After 200,000 lifetime collected coins, gate selection leans toward subtract/divide options.
 - **Obstacle collisions:** the first unblocked obstacle hit now ends the run. Shield absorbs one hit; Super Punch breaks breakable walls.
-- **Power-ups:** Magnet (5 s, 8 m radius, 15 m/s pull), Shield (8 s or one hit), Super Punch (6 s), Double Coins (6 s), Freeze (5 s). Re-picking the same type resets the full duration; different types coexist. Timers freeze during pause.
+- **Power-ups:** Magnet (5 s, 8 m radius, 15 m/s pull), Shield (8 s or one hit), Super Punch (8 s), Double Coins (6 s), Freeze (5 s). Re-picking the same type resets the full duration; different types coexist. Timers freeze during pause.
 - **HUD and results:** a five-chip power-up strip with timer bars, run-complete overlay, in-place restart and a smooth transition vignette.
 - **Restart:** balance, ledger, claims, systems and effects reset, while lifetime collected coins persist for gate bias.
 - **Advertising:** five static Spryntworks formats remain; logo aspect ratio is unchanged.

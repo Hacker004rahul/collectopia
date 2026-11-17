@@ -240,7 +240,7 @@ obstacles are excluded from Phase 1.
 |---|---|---|---|
 | 5.1 | Magnet (5 s, smooth attraction) | `[x]` | In-range coins pulled toward lane; each coin still claimed once |
 | 5.2 | Shield (one hit, consumed) | `[x]` | Blocks exactly one obstacle or enemy hit, then clears both shield flags and the timer |
-| 5.3 | Super Punch (6 s, breakable walls/heavies) | `[x]` | Breakable walls destroyed; enemy punch receives super flag; expires cleanly |
+| 5.3 | Super Punch (8 s, breakable walls/heavies) | `[x]` | Breakable walls destroyed; enemy punch receives super flag; expires cleanly |
 | 5.4 | Double Coins (6 s, coins only) | `[x]` | Coin value ×2; gates and enemy rewards are unaffected |
 | 5.5 | Freeze Enemy (5 s, visible, safe resume) | `[x]` | Enemies stop, tint blue and resume with normal materials |
 | 5.6 | Spawn rules (fair, reachable, not inside hazards) | `[x]` | Uses shared spawn reservations and max-active cap |
@@ -676,7 +676,7 @@ Phase 2 is complete and stopped at the phase gate. Please approve Phase 2 and Ph
 - **Gates:** seven variants with weighted pair selection; after 200,000 lifetime collected coins the table leans toward subtract/divide choices.
 - **Run economy:** restart resets the run balance, ledger and claimed IDs while preserving lifetime collected coins for gate bias.
 - **Obstacle collisions:** first unblocked hit ends the run; Shield absorbs one hit; Super Punch smashes breakable walls.
-- **Power-ups:** Magnet 5 s, Shield 8 s/one hit, Super Punch 6 s, Double Coins 6 s, Freeze 5 s; same-type pickup refreshes to full duration; different types coexist.
+- **Power-ups:** Magnet 5 s, Shield 8 s/one hit, Super Punch 8 s, Double Coins 6 s, Freeze 5 s; same-type pickup refreshes to full duration; different types coexist.
 - **Results/restart:** distance, level, coins, gates, enemies and final balance shown; “Run again” resets in place without a reload or duplicate canvas.
 - **Transitions:** replaced the near-black overlay with a transparent radial vignette while keeping the old world visible until the next pool is ready.
 - **Advertising:** five static formats retained; no LED format; logo aspect ratio unchanged.

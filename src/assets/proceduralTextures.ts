@@ -573,38 +573,213 @@ export function createGlowTexture(): THREE.CanvasTexture {
 
 const gateTextureCache = new Map<string, THREE.CanvasTexture>();
 
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function colorWithAlpha(hex: string, alpha: number): string {
+  const value = hex.replace('#', '');
+  const red = Number.parseInt(value.slice(0, 2), 16);
+  const green = Number.parseInt(value.slice(2, 4), 16);
+  const blue = Number.parseInt(value.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 export function createGateTexture(spec: GateSpec): THREE.CanvasTexture {
   const cacheKey = `${spec.operation}:${spec.value}:${spec.color}`;
   const cached = gateTextureCache.get(cacheKey);
   if (cached) return cached;
 
-  const { canvas, ctx } = makeCanvas(512, 280);
+  const width = 512;
+  const height = 300;
+  const { canvas, ctx } = makeCanvas(width, height);
 
-  const background = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  background.addColorStop(0, '#182233');
-  background.addColorStop(1, '#080c13');
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const panelX = 10;
+  const panelY = 10;
+  const panelWidth = width - 20;
+  const panelHeight = height - 20;
+  const panelRadius = 30;
 
-  ctx.strokeStyle = spec.color;
-  ctx.lineWidth = 12;
-  ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+  ctx.save();
+  roundedRect(ctx, panelX, panelY, panelWidth, panelHeight, panelRadius);
+  ctx.clip();
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(20, 20, canvas.width - 40, 60);
+  const glass = ctx.createLinearGradient(0, panelY, 0, height - panelY);
+  glass.addColorStop(0, '#223047');
+  glass.addColorStop(0.48, '#111a2a');
+  glass.addColorStop(1, '#070b13');
+  ctx.fillStyle = glass;
+  ctx.fillRect(0, 0, width, height);
+
+  const glow = ctx.createRadialGradient(
+    width / 2,
+    176,
+    8,
+    width / 2,
+    176,
+    208,
+  );
+  glow.addColorStop(0, colorWithAlpha(spec.color, 0.3));
+  glow.addColorStop(0.52, colorWithAlpha(spec.color, 0.08));
+  glow.addColorStop(1, colorWithAlpha(spec.color, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+
+  const sheen = ctx.createLinearGradient(36, 18, 460, 282);
+  sheen.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+  sheen.addColorStop(0.32, 'rgba(255, 255, 255, 0.035)');
+  sheen.addColorStop(0.68, 'rgba(255, 255, 255, 0)');
+  sheen.addColorStop(1, 'rgba(255, 255, 255, 0.07)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.beginPath();
+  ctx.moveTo(44, 18);
+  ctx.lineTo(148, 18);
+  ctx.lineTo(72, 284);
+  ctx.lineTo(18, 284);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+  ctx.fillRect(18, 260, width - 36, 32);
+  ctx.restore();
+
+  const outerTrim = ctx.createLinearGradient(0, 0, width, height);
+  outerTrim.addColorStop(0, '#fff0c7');
+  outerTrim.addColorStop(0.24, '#d8bf8a');
+  outerTrim.addColorStop(0.55, '#a98045');
+  outerTrim.addColorStop(0.78, '#f3dda8');
+  outerTrim.addColorStop(1, '#8b6434');
+
+  roundedRect(ctx, 11, 11, width - 22, height - 22, 29);
+  ctx.strokeStyle = 'rgba(5, 8, 14, 0.9)';
+  ctx.lineWidth = 7;
+  ctx.stroke();
+
+  roundedRect(ctx, 15, 15, width - 30, height - 30, 26);
+  ctx.strokeStyle = outerTrim;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  roundedRect(ctx, 20, 20, width - 40, height - 40, 22);
+  ctx.strokeStyle = 'rgba(255, 243, 205, 0.62)';
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+
+  roundedRect(ctx, 25, 25, width - 50, height - 50, 19);
+  ctx.strokeStyle = colorWithAlpha(spec.color, 0.72);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.strokeStyle = colorWithAlpha(spec.color, 0.25);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(38, 88);
+  ctx.lineTo(width - 38, 88);
+  ctx.stroke();
+
+  for (const [studX, studY] of [
+    [32, 32],
+    [width - 32, 32],
+    [32, height - 32],
+    [width - 32, height - 32],
+  ] as const) {
+    const stud = ctx.createRadialGradient(
+      studX - 1,
+      studY - 1,
+      0,
+      studX,
+      studY,
+      5,
+    );
+    stud.addColorStop(0, '#fff6d8');
+    stud.addColorStop(0.5, '#c9a768');
+    stud.addColorStop(1, '#6f4f26');
+    ctx.fillStyle = stud;
+    ctx.beginPath();
+    ctx.arc(studX, studY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = spec.color;
-  ctx.font = '700 36px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText(spec.label, canvas.width / 2, 54);
 
-  const valueGradient = ctx.createLinearGradient(0, 90, 0, 240);
+  ctx.beginPath();
+  ctx.arc(width / 2, 57, 24, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(5, 9, 16, 0.6)';
+  ctx.fill();
+  ctx.strokeStyle = colorWithAlpha(spec.color, 0.85);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 238, 191, 0.52)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(width / 2, 57, 20, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = spec.color;
+  ctx.font = '800 25px "Segoe UI", system-ui, sans-serif';
+  ctx.shadowColor = colorWithAlpha(spec.color, 0.75);
+  ctx.shadowBlur = 12;
+  ctx.fillText(spec.symbol, width / 2, 58);
+  ctx.shadowBlur = 0;
+
+  const valueGradient = ctx.createLinearGradient(0, 98, 0, 238);
   valueGradient.addColorStop(0, '#ffffff');
+  valueGradient.addColorStop(0.58, '#f8f2e4');
   valueGradient.addColorStop(1, spec.color);
   ctx.fillStyle = valueGradient;
-  ctx.font = '900 146px "Segoe UI", system-ui, sans-serif';
-  ctx.fillText(`${spec.symbol}${spec.value}`, canvas.width / 2, 178);
+  ctx.shadowColor = colorWithAlpha(spec.color, 0.62);
+  ctx.shadowBlur = 22;
+  ctx.shadowOffsetY = 4;
+
+  let fontSize = 124;
+  const value = `${spec.symbol}${spec.value}`;
+  do {
+    ctx.font = `900 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
+    fontSize -= 6;
+  } while (ctx.measureText(value).width > 414 && fontSize > 76);
+  ctx.fillText(value, width / 2, 174);
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.strokeStyle = 'rgba(255, 236, 184, 0.55)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(178, 244);
+  ctx.lineTo(236, 244);
+  ctx.moveTo(width - 178, 244);
+  ctx.lineTo(width - 236, 244);
+  ctx.stroke();
+
+  ctx.fillStyle = colorWithAlpha(spec.color, 0.9);
+  ctx.beginPath();
+  ctx.moveTo(width / 2, 237);
+  ctx.lineTo(width / 2 + 7, 244);
+  ctx.lineTo(width / 2, 251);
+  ctx.lineTo(width / 2 - 7, 244);
+  ctx.closePath();
+  ctx.fill();
 
   const texture = canvasTexture(canvas, { clamp: true });
   gateTextureCache.set(cacheKey, texture);

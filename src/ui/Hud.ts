@@ -7,6 +7,7 @@ import {
 } from '../powerups/PowerUpTimers';
 
 export interface HudCallbacks {
+  onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onPunch: () => void;
@@ -57,13 +58,22 @@ const TEMPLATE = `
       <strong class="zone-transition-name"></strong>
     </div>
   </div>
-  <div class="hint">
-    <span>Swipe or drag to steer</span>
-    <span class="hint-keys">← → or A / D · F or Space to punch · Esc to pause</span>
+  <div class="tutorial-hint" role="status" aria-live="polite" aria-hidden="true">
+    <span class="tutorial-touch">Swipe or drag to steer</span>
+    <span class="tutorial-keys">← → or A / D · F or Space to punch · Esc to pause</span>
+  </div>
+  <div class="start-prompt">
+    <button class="start-button" type="button" aria-label="Start run">START RUN</button>
   </div>
   <div class="punch-area">
     <button class="punch-button" type="button" aria-label="Punch">
-      <span class="punch-icon" aria-hidden="true">👊</span>
+      <svg class="punch-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5.2 10.4V8.8a1.6 1.6 0 0 1 3.2 0v1.4"/>
+        <path d="M8.4 9.9V7.7a1.6 1.6 0 0 1 3.2 0v2.1"/>
+        <path d="M11.6 9.9V8.1a1.6 1.6 0 0 1 3.2 0v2"/>
+        <path d="M14.8 10V9a1.6 1.6 0 0 1 3.2 0v5.4c0 2.7-2 4.8-4.7 4.8h-1.1c-1.4 0-2.6-.7-3.4-1.8l-3-4.2a1.7 1.7 0 0 1 2.6-2.1l1.4 1.3"/>
+        <path d="M5.2 10.4H4.1a1.6 1.6 0 0 0 0 3.2h1.1"/>
+      </svg>
       <span class="punch-label">PUNCH</span>
       <svg class="punch-cooldown-ring" viewBox="0 0 44 44" aria-hidden="true">
         <circle class="punch-cooldown-track" cx="22" cy="22" r="18"/>
@@ -98,6 +108,26 @@ const TEMPLATE = `
   </div>
 `;
 
+const TUTORIAL_STORAGE_KEY = 'collectopia.tutorial.v1';
+const TUTORIAL_DURATION_MS = 7_000;
+const TUTORIAL_FADE_MS = 300;
+
+function hasCompletedTutorial(): boolean {
+  try {
+    return window.localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberTutorialCompleted(): void {
+  try {
+    window.localStorage.setItem(TUTORIAL_STORAGE_KEY, '1');
+  } catch {
+    // Storage can be unavailable in private or restricted browsing contexts.
+  }
+}
+
 export class Hud {
   private readonly root: HTMLDivElement;
   private readonly balanceValue: HTMLElement;
@@ -110,6 +140,9 @@ export class Hud {
   private readonly toast: HTMLElement;
   private readonly zoneTransition: HTMLElement;
   private readonly zoneTransitionName: HTMLElement;
+  private readonly tutorialHint: HTMLElement;
+  private readonly startPrompt: HTMLElement;
+  private readonly startButton: HTMLButtonElement;
   private readonly pauseOverlay: HTMLElement;
   private readonly resultsOverlay: HTMLElement;
   private readonly resultsReason: HTMLElement;
@@ -123,6 +156,9 @@ export class Hud {
   private coinPopIndex = 0;
   private toastTimer = 0;
   private balancePulseTimer = 0;
+  private tutorialTimer = 0;
+  private tutorialHideTimer = 0;
+  private tutorialComplete = false;
   private lastLevelIndex = -1;
   private lastProgress = -1;
   private lastCooldownRatio = -1;
@@ -143,6 +179,9 @@ export class Hud {
     this.toast = this.query('.gate-toast');
     this.zoneTransition = this.query('.zone-transition');
     this.zoneTransitionName = this.query('.zone-transition-name');
+    this.tutorialHint = this.query('.tutorial-hint');
+    this.startPrompt = this.query('.start-prompt');
+    this.startButton = this.query<HTMLButtonElement>('.start-button');
     this.pauseOverlay = this.query('.pause-overlay');
     this.resultsOverlay = this.query('.results-overlay');
     this.resultsReason = this.query('.results-reason');
@@ -151,7 +190,11 @@ export class Hud {
 
     this.buildPowerUpChips();
 
+    this.tutorialComplete = hasCompletedTutorial();
+    this.pauseButton.disabled = true;
+
     this.punchButton = this.query<HTMLButtonElement>('.punch-button');
+    this.punchButton.disabled = true;
     this.punchCooldownFill = this.root.querySelector(
       '.punch-cooldown-fill',
     ) as SVGCircleElement;
@@ -160,6 +203,11 @@ export class Hud {
     const CIRCUMFERENCE = 2 * Math.PI * 18;
     this.punchCooldownFill.style.strokeDasharray = `${CIRCUMFERENCE}`;
     this.punchCooldownFill.style.strokeDashoffset = '0';
+
+    this.startButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onStart();
+    });
 
     this.pauseButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -345,6 +393,43 @@ export class Hud {
     this.pauseButton.setAttribute('aria-label', paused ? 'Game paused' : 'Pause game');
   }
 
+  beginRun(): void {
+    this.startPrompt.hidden = true;
+    this.pauseButton.disabled = false;
+    this.punchButton.disabled = false;
+    this.root.classList.add('is-started');
+
+    if (this.tutorialComplete) return;
+
+    window.clearTimeout(this.tutorialHideTimer);
+    this.tutorialHint.hidden = false;
+    this.tutorialHint.classList.add('is-visible');
+    this.tutorialHint.setAttribute('aria-hidden', 'false');
+    window.clearTimeout(this.tutorialTimer);
+    this.tutorialTimer = window.setTimeout(() => {
+      this.dismissTutorial();
+    }, TUTORIAL_DURATION_MS);
+  }
+
+  dismissTutorial(): void {
+    if (
+      this.tutorialComplete ||
+      !this.tutorialHint.classList.contains('is-visible')
+    ) {
+      return;
+    }
+
+    this.tutorialComplete = true;
+    window.clearTimeout(this.tutorialTimer);
+    this.tutorialTimer = 0;
+    this.tutorialHint.classList.remove('is-visible');
+    this.tutorialHint.setAttribute('aria-hidden', 'true');
+    this.tutorialHideTimer = window.setTimeout(() => {
+      this.tutorialHint.hidden = true;
+    }, TUTORIAL_FADE_MS);
+    rememberTutorialCompleted();
+  }
+
   /**
    * Update the Punch button cooldown ring.
    * @param ratio  0 = ready, 1 = just punched (full cooldown).
@@ -409,6 +494,8 @@ export class Hud {
   dispose(): void {
     window.clearTimeout(this.toastTimer);
     window.clearTimeout(this.balancePulseTimer);
+    window.clearTimeout(this.tutorialTimer);
+    window.clearTimeout(this.tutorialHideTimer);
     this.root.remove();
   }
 

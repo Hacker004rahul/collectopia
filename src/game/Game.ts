@@ -58,7 +58,8 @@ export class Game {
   private readonly projected = new THREE.Vector3();
   private readonly pixelRatioCap: number;
   private distance = 0;
-  private paused = false;
+  private started = false;
+  private paused = true;
   private gameOver = false;
   private currentLevelIndex = -1;
   private hitSpeedTimer = 0;
@@ -99,15 +100,23 @@ export class Game {
 
     this.economy = new EconomyManager();
     this.hud = new Hud(this.root, {
-      onPause: () => this.togglePause(),
+      onStart: () => this.startRun(),
+      onPause: () => {
+        this.hud.dismissTutorial();
+        this.togglePause();
+      },
       onResume: () => this.setPaused(false),
       onPunch: () => {
+        this.hud.dismissTutorial();
         this.audio.unlock();
         if (!this.paused && !this.gameOver) {
           this.punch.trigger(this.player.z, this.player.x);
         }
       },
-      onRestart: () => this.restartRun(),
+      onRestart: () => {
+        this.hud.dismissTutorial();
+        this.restartRun();
+      },
     });
     this.hud.setBalance(this.economy.balance, false);
     this.hud.setLevel(LEVELS[0]);
@@ -173,14 +182,17 @@ export class Game {
 
     this.input = new InputController(this.renderer.domElement, {
       onSteer: (direction) => {
+        this.hud.dismissTutorial();
         this.audio.unlock();
         if (!this.paused && !this.gameOver) this.player.steer(direction);
       },
       onPause: () => {
+        this.hud.dismissTutorial();
         this.audio.unlock();
         this.togglePause();
       },
       onPunch: () => {
+        this.hud.dismissTutorial();
         this.audio.unlock();
         if (!this.paused && !this.gameOver) {
           this.punch.trigger(this.player.z, this.player.x);
@@ -191,7 +203,7 @@ export class Game {
     this.loop = new Loop(
       (_dt, now) => {
         const dt = this.clock.tick(now);
-        if (!this.clock.isPaused && !this.gameOver) {
+        if (this.started && !this.clock.isPaused && !this.gameOver) {
           this.update(dt);
         }
       },
@@ -208,6 +220,7 @@ export class Game {
 
   start(): void {
     this.clock.start(performance.now());
+    this.clock.setPaused(true);
     this.renderer.render(this.scene, this.camera);
     this.loop.start();
   }
@@ -246,6 +259,7 @@ export class Game {
 
   private readonly handleVisibility = (): void => {
     if (document.hidden) {
+      this.hud.dismissTutorial();
       this.setPaused(true);
     }
   };
@@ -254,8 +268,17 @@ export class Game {
     this.audio.unlock();
   };
 
+  private startRun(): void {
+    if (this.started || this.gameOver) return;
+    this.started = true;
+    this.paused = false;
+    this.clock.setPaused(false);
+    this.hud.beginRun();
+    this.audio.unlock();
+  }
+
   private togglePause(): void {
-    if (this.gameOver) return;
+    if (!this.started || this.gameOver) return;
     this.setPaused(!this.paused);
   }
 
@@ -489,6 +512,7 @@ export class Game {
   }
 
   private restartRun(): void {
+    this.hud.dismissTutorial();
     this.reservations.clear();
     this.economy.resetRun(ECONOMY.startingBalance);
     this.player.reset();

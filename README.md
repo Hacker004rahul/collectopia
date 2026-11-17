@@ -8,7 +8,7 @@ A mobile-first 3D endless runner through a stylised Indian neighbourhood, built 
 - Gold coins collected exactly once, with floating `+10` feedback.
 - Seven math gates: `+100`, `−50`, `−100`, `×1`, `×2`, `÷2`, `÷4`.
 - Lifetime coin tracking that biases gate choices toward tougher decisions after 200,000 coins.
-- Five power-ups: Magnet (5 s), Shield (one hit), Super Punch (6 s), Double Coins (6 s), Freeze (5 s).
+- Five power-ups: Magnet (5 s), Shield (one hit), Super Punch (8 s), Double Coins (6 s), Freeze (5 s).
 - Obstacles and enemies, punch combat, breakable walls and shield interactions.
 - Obstacle collisions end the run; the results screen reports distance, level, coins, gates, enemies and final balance.
 - In-place restart with a fresh run balance while lifetime collected coins persist.

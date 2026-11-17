@@ -73,7 +73,7 @@ export const POWERUPS = {
   collectRadiusZ: 1.35,
   magnetDuration: 5,
   shieldDuration: 8,
-  superPunchDuration: 6,
+  superPunchDuration: 8,
   doubleCoinsDuration: 6,
   freezeDuration: 5,
   magnetRadius: 8,
