@@ -5,6 +5,7 @@ import {
   type DifficultyProfile,
 } from '../config/difficulty';
 import { getLevelState, LEVELS } from '../config/levels';
+import { REVIVE_INVULNERABILITY_SECONDS } from '../config/revive';
 import { Clock } from '../core/Clock';
 import { getDeviceQuality } from '../core/device';
 import { Loop } from '../core/Loop';
@@ -28,6 +29,7 @@ import {
 } from '../obstacles/ObstacleSystem';
 import { EnemySystem, type EnemyHitEvent, type EnemyDefeatedEvent } from '../enemies/EnemySystem';
 import { PunchSystem } from '../enemies/PunchSystem';
+import { ReviveRunState } from './ReviveRunState';
 import {
   PowerUpSystem,
   type PowerUpCollectEvent,
@@ -54,6 +56,7 @@ export class Game {
   private readonly punch: PunchSystem;
   private readonly powerups: PowerUpSystem;
   private readonly reservations = new SpawnReservations();
+  private readonly reviveRun = new ReviveRunState();
   private readonly cameraLook = new THREE.Vector3();
   private readonly projected = new THREE.Vector3();
   private readonly pixelRatioCap: number;
@@ -66,6 +69,9 @@ export class Game {
   private runCoins = 0;
   private runGates = 0;
   private runEnemies = 0;
+  private revivePending = false;
+  private invulnerabilityTimer = 0;
+  private runEndReason = '';
 
   constructor(private readonly root: HTMLElement) {
     const width = window.innerWidth;
@@ -117,6 +123,13 @@ export class Game {
         this.hud.dismissTutorial();
         this.restartRun();
       },
+      onWatchRevive: () => this.watchReviveVideo(),
+      onReviveComplete: () => this.completeRevive(),
+      onReviveFailure: () => {
+        this.revivePending = false;
+        this.reviveRun.failAttempt();
+      },
+      onEndRun: () => this.finalizeRun(),
     });
     this.hud.setBalance(this.economy.balance, false);
     this.hud.setLevel(LEVELS[0]);
@@ -262,6 +275,7 @@ export class Game {
   private readonly handleVisibility = (): void => {
     if (document.hidden) {
       this.hud.dismissTutorial();
+      if (this.revivePending) this.hud.interruptReviveVideo();
       this.setPaused(true);
     }
   };
@@ -292,6 +306,11 @@ export class Game {
   }
 
   private update(dt: number): void {
+    this.invulnerabilityTimer = Math.max(0, this.invulnerabilityTimer - dt);
+    const invulnerable = this.invulnerabilityTimer > 0;
+    this.obstacles.invulnerable = invulnerable;
+    this.enemies.invulnerable = invulnerable;
+
     const previousLevel = getLevelState(this.distance).level;
     const baseSpeed = previousLevel.speed;
     const speedFactor = this.hitSpeedTimer > 0 ? OBSTACLES_CFG.speedPenaltyFactor : 1;
@@ -496,6 +515,7 @@ export class Game {
   private endRun(reason: string): void {
     if (this.gameOver) return;
     this.gameOver = true;
+    this.runEndReason = reason;
     this.clock.setPaused(true);
     this.hud.setPaused(false);
     this.audio.gameOver();
@@ -509,6 +529,47 @@ export class Game {
       enemiesDefeated: this.runEnemies,
       finalBalance: this.economy.balance,
       reason,
+    };
+    this.revivePending = false;
+    this.hud.showRevivePrompt(results, this.reviveRun.available);
+  }
+
+  private watchReviveVideo(): void {
+    if (!this.gameOver || !this.reviveRun.beginAttempt()) return;
+
+    this.revivePending = true;
+    if (!this.hud.playReviveVideo()) {
+      this.revivePending = false;
+      this.reviveRun.failAttempt();
+    }
+  }
+
+  private completeRevive(): void {
+    if (!this.gameOver || !this.revivePending) return;
+    if (!this.reviveRun.completeAttempt()) return;
+
+    this.revivePending = false;
+    this.obstacles.resumeAfterFatal();
+    this.invulnerabilityTimer = REVIVE_INVULNERABILITY_SECONDS;
+    this.obstacles.invulnerable = true;
+    this.enemies.invulnerable = true;
+    this.gameOver = false;
+    this.clock.setPaused(false);
+    this.hud.hideResults();
+  }
+
+  private finalizeRun(): void {
+    if (!this.gameOver) return;
+
+    const level = getLevelState(this.distance).level;
+    const results: RunResults = {
+      distance: this.distance,
+      level: level.index + 1,
+      coinsCollected: this.runCoins,
+      gatesPassed: this.runGates,
+      enemiesDefeated: this.runEnemies,
+      finalBalance: this.economy.balance,
+      reason: this.runEndReason,
     };
     this.hud.showResults(results);
   }
@@ -535,6 +596,10 @@ export class Game {
     this.runEnemies = 0;
     this.gameOver = false;
     this.paused = false;
+    this.revivePending = false;
+    this.reviveRun.reset();
+    this.invulnerabilityTimer = 0;
+    this.runEndReason = '';
 
     this.clock.setPaused(false);
     this.hud.setPaused(false);

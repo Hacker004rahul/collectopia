@@ -86,6 +86,8 @@ export class ObstacleSystem {
   shieldActive = false;
   /** Set true when Super Punch power-up is active. */
   breakableActive = false;
+  /** Set true while the player has temporary revive invulnerability. */
+  invulnerable = false;
 
   private readonly records: ObstacleRecord[] = [];
   private rng = new Rng(0x0b57ac1e);
@@ -93,6 +95,7 @@ export class ObstacleSystem {
   private nextId = 1;
   private time = 0;
   private runEnded = false;
+  private fatalObstacleId: number | null = null;
   private difficulty: DifficultyProfile = getDifficultyProfile(0);
 
   // reusable vectors — zero per-frame allocation
@@ -174,6 +177,8 @@ export class ObstacleSystem {
 
       if (!overlaps) continue;
 
+      if (this.invulnerable) continue;
+
       const outcome = resolveObstacleContact(
         rec.kind,
         this.shieldActive,
@@ -200,6 +205,7 @@ export class ObstacleSystem {
 
       // First unblocked collision ends the run. Game stops updating after this.
       this.runEnded = true;
+      this.fatalObstacleId = rec.id;
       this.callbacks.onHit({
         position: new THREE.Vector3(rec.x, 1.2, obsZ),
         shieldBlocked: false,
@@ -222,9 +228,26 @@ export class ObstacleSystem {
     this.nextId = 1;
     this.time = 0;
     this.runEnded = false;
+    this.fatalObstacleId = null;
     this.shieldActive = false;
     this.breakableActive = false;
+    this.invulnerable = false;
     this.difficulty = getDifficultyProfile(0);
+  }
+
+  resumeAfterFatal(): void {
+    if (!this.runEnded || this.fatalObstacleId === null) return;
+
+    const fatalObstacle = this.records.find(
+      (record) => record.id === this.fatalObstacleId,
+    );
+    if (fatalObstacle) {
+      fatalObstacle.broken = true;
+      fatalObstacle.group.visible = false;
+    }
+
+    this.fatalObstacleId = null;
+    this.runEnded = false;
   }
 
   dispose(): void {

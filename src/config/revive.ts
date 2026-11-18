@@ -1,0 +1,1 @@
+export const REVIVE_INVULNERABILITY_SECONDS = 2;

@@ -5,6 +5,10 @@ import {
   type ActivePowerUpState,
   type PowerUpType,
 } from '../powerups/PowerUpTimers';
+import {
+  LocalDemoVideoProvider,
+  type ReviveVideoElement,
+} from './LocalDemoVideoProvider';
 
 export interface HudCallbacks {
   onStart: () => void;
@@ -12,6 +16,10 @@ export interface HudCallbacks {
   onResume: () => void;
   onPunch: () => void;
   onRestart: () => void;
+  onWatchRevive: () => void;
+  onReviveComplete: () => void;
+  onReviveFailure: () => void;
+  onEndRun: () => void;
 }
 
 export interface RunResults {
@@ -92,10 +100,10 @@ const TEMPLATE = `
       <p class="pause-note">Stay in your lane. Collect coins. Choose the better gate.</p>
     </div>
   </div>
-  <div class="results-overlay" hidden>
+  <div class="results-overlay" role="dialog" aria-modal="true" aria-labelledby="results-title" hidden>
     <div class="results-panel">
-      <p class="results-kicker">RUN COMPLETE</p>
-      <h2>GAME OVER</h2>
+      <p class="results-kicker">RUN SUMMARY</p>
+      <h2 id="results-title">GAME OVER</h2>
       <p class="results-reason"></p>
       <div class="results-grid">
         <div class="results-stat"><span>Distance</span><strong data-result="distance">0 m</strong></div>
@@ -105,8 +113,43 @@ const TEMPLATE = `
         <div class="results-stat"><span>Enemies</span><strong data-result="enemies">0</strong></div>
         <div class="results-stat"><span>Balance</span><strong data-result="balance">0</strong></div>
       </div>
+      <p class="revive-error" role="alert" hidden></p>
+      <div class="revive-offer">
+        <span class="revive-offer-label">ONE-TIME REVIVE</span>
+        <p>Finish the local demo video to continue this run.</p>
+      </div>
+      <div class="revive-actions">
+        <button class="revive-watch-button" type="button">
+          <span>WATCH VIDEO</span>
+          <span class="revive-button-detail">CONTINUE THIS RUN</span>
+        </button>
+        <button class="end-run-button" type="button">
+          <span>END RUN</span>
+          <span class="end-run-detail">Save these results</span>
+        </button>
+      </div>
       <button class="restart-button" type="button">Run again</button>
-      <p class="results-note">Lifetime coins keep raising the gate stakes.</p>
+      <p class="results-note">Lifetime coins carry over between runs.</p>
+    </div>
+    <div class="revive-video-panel" tabindex="-1" hidden>
+      <p class="results-kicker">LOCAL DEMO <span class="provider-tag">NOT AN AD</span></p>
+      <h2>CONTINUE RUN</h2>
+      <p class="revive-video-note">Your run is paused while this video plays.</p>
+      <div class="revive-video-frame">
+        <video
+          class="revive-video"
+          playsinline
+          preload="metadata"
+          disablepictureinpicture
+          controlslist="nodownload noplaybackrate noremoteplayback"
+          aria-label="Local demo video for a one-time run revive"
+        ></video>
+      </div>
+      <div class="revive-video-progress" role="progressbar" aria-label="Video progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="revive-video-progress-fill"></span>
+      </div>
+      <p class="revive-video-countdown" role="status" aria-live="polite">Loading video...</p>
+      <p class="revive-video-note">Complete the full video to earn your one-time revive.</p>
     </div>
   </div>
 `;
@@ -132,6 +175,7 @@ function rememberTutorialCompleted(): void {
 }
 
 export class Hud {
+  private readonly callbacks: HudCallbacks;
   private readonly root: HTMLDivElement;
   private readonly balanceValue: HTMLElement;
   private readonly balancePill: HTMLElement;
@@ -148,6 +192,17 @@ export class Hud {
   private readonly startButton: HTMLButtonElement;
   private readonly pauseOverlay: HTMLElement;
   private readonly resultsOverlay: HTMLElement;
+  private readonly resultsPanel: HTMLElement;
+  private readonly reviveVideoPanel: HTMLElement;
+  private readonly reviveError: HTMLElement;
+  private readonly reviveOffer: HTMLElement;
+  private readonly reviveWatchButton: HTMLButtonElement;
+  private readonly endRunButton: HTMLButtonElement;
+  private readonly reviveVideo: HTMLVideoElement;
+  private readonly reviveVideoProgress: HTMLElement;
+  private readonly reviveVideoProgressFill: HTMLElement;
+  private readonly reviveVideoCountdown: HTMLElement;
+  private readonly restartButton: HTMLButtonElement;
   private readonly resultsReason: HTMLElement;
   private readonly pauseButton: HTMLButtonElement;
   private readonly punchButton: HTMLButtonElement;
@@ -165,8 +220,10 @@ export class Hud {
   private lastLevelIndex = -1;
   private lastProgress = -1;
   private lastCooldownRatio = -1;
+  private activeVideoProvider: LocalDemoVideoProvider | null = null;
 
   constructor(container: HTMLElement, callbacks: HudCallbacks) {
+    this.callbacks = callbacks;
     this.root = document.createElement('div');
     this.root.className = 'hud';
     this.root.innerHTML = TEMPLATE;
@@ -187,6 +244,16 @@ export class Hud {
     this.startButton = this.query<HTMLButtonElement>('.start-button');
     this.pauseOverlay = this.query('.pause-overlay');
     this.resultsOverlay = this.query('.results-overlay');
+    this.resultsPanel = this.query('.results-panel');
+    this.reviveVideoPanel = this.query('.revive-video-panel');
+    this.reviveError = this.query('.revive-error');
+    this.reviveOffer = this.query('.revive-offer');
+    this.reviveWatchButton = this.query<HTMLButtonElement>('.revive-watch-button');
+    this.endRunButton = this.query<HTMLButtonElement>('.end-run-button');
+    this.reviveVideo = this.query<HTMLVideoElement>('.revive-video');
+    this.reviveVideoProgress = this.query('.revive-video-progress');
+    this.reviveVideoProgressFill = this.query('.revive-video-progress-fill');
+    this.reviveVideoCountdown = this.query('.revive-video-countdown');
     this.resultsReason = this.query('.results-reason');
     this.pauseButton = this.query('.pause-button');
     this.powerupStrip = this.query('.powerup-strip');
@@ -228,10 +295,20 @@ export class Hud {
       callbacks.onResume();
     });
 
-    const restartButton = this.query<HTMLButtonElement>('.restart-button');
-    restartButton.addEventListener('click', (event) => {
+    this.restartButton = this.query<HTMLButtonElement>('.restart-button');
+    this.restartButton.addEventListener('click', (event) => {
       event.stopPropagation();
       callbacks.onRestart();
+    });
+
+    this.reviveWatchButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onWatchRevive();
+    });
+
+    this.endRunButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      callbacks.onEndRun();
     });
   }
 
@@ -362,6 +439,37 @@ export class Hud {
   }
 
   showResults(results: RunResults): void {
+    this.renderResults(results);
+    this.restartButton.hidden = false;
+    this.reviveOffer.hidden = true;
+    this.reviveWatchButton.hidden = true;
+    this.endRunButton.hidden = true;
+    this.reviveError.hidden = true;
+    this.reviveVideoPanel.hidden = true;
+    this.resultsPanel.hidden = false;
+    this.root.classList.add('is-finished');
+    this.resultsOverlay.hidden = false;
+    this.restartButton.focus();
+  }
+
+  showRevivePrompt(results: RunResults, canRevive: boolean): void {
+    this.renderResults(results);
+    this.restartButton.hidden = true;
+    this.reviveOffer.hidden = !canRevive;
+    this.reviveWatchButton.hidden = !canRevive;
+    this.endRunButton.hidden = false;
+    this.reviveError.textContent = canRevive
+      ? ''
+      : 'Your one revive has already been used.';
+    this.reviveError.hidden = canRevive;
+    this.resultsPanel.hidden = false;
+    this.reviveVideoPanel.hidden = true;
+    this.resultsOverlay.hidden = false;
+    this.root.classList.add('is-finished');
+    (canRevive ? this.reviveWatchButton : this.endRunButton).focus();
+  }
+
+  private renderResults(results: RunResults): void {
     this.resultsReason.textContent = results.reason;
     this.resultsOverlay.querySelector('[data-result="distance"]')!.textContent =
       `${Math.round(results.distance).toLocaleString('en-IN')} m`;
@@ -375,11 +483,63 @@ export class Hud {
       String(results.enemiesDefeated);
     this.resultsOverlay.querySelector('[data-result="balance"]')!.textContent =
       results.finalBalance.toLocaleString('en-IN');
-    this.resultsOverlay.hidden = false;
-    this.root.classList.add('is-finished');
+  }
+
+  playReviveVideo(): boolean {
+    if (this.activeVideoProvider) return false;
+
+    this.reviveError.hidden = true;
+    this.resultsPanel.hidden = true;
+    this.reviveVideoPanel.hidden = false;
+    this.reviveVideoProgress.setAttribute('aria-valuenow', '0');
+    this.reviveVideoProgressFill.style.transform = 'scaleX(0)';
+    this.reviveVideoCountdown.textContent = 'Loading video...';
+    this.reviveVideoPanel.focus();
+
+    const video = this.reviveVideo as ReviveVideoElement;
+    this.activeVideoProvider = new LocalDemoVideoProvider(video, {
+      onProgress: (currentTime, duration) => {
+        if (!Number.isFinite(duration) || duration <= 0) {
+          this.reviveVideoCountdown.textContent = 'Loading video...';
+          return;
+        }
+
+        const ratio = Math.max(0, Math.min(1, currentTime / duration));
+        const percent = Math.floor(ratio * 100);
+        const remaining = Math.max(0, Math.ceil(duration - currentTime));
+        this.reviveVideoProgressFill.style.transform = `scaleX(${ratio})`;
+        this.reviveVideoProgress.setAttribute('aria-valuenow', String(percent));
+        this.reviveVideoCountdown.textContent = `${remaining}s remaining`;
+      },
+      onComplete: () => {
+        this.activeVideoProvider = null;
+        this.reviveVideoPanel.hidden = true;
+        this.callbacks.onReviveComplete();
+      },
+      onFailure: (message) => {
+        this.activeVideoProvider = null;
+        this.reviveVideoPanel.hidden = true;
+        this.resultsPanel.hidden = false;
+        this.reviveOffer.hidden = true;
+        this.reviveWatchButton.hidden = true;
+        this.reviveError.textContent = message;
+        this.reviveError.hidden = false;
+        this.endRunButton.focus();
+        this.callbacks.onReviveFailure();
+      },
+    });
+    this.activeVideoProvider.start();
+    return true;
+  }
+
+  interruptReviveVideo(): void {
+    this.activeVideoProvider?.interrupt();
   }
 
   hideResults(): void {
+    this.activeVideoProvider?.dispose();
+    this.activeVideoProvider = null;
+    this.reviveVideoPanel.hidden = true;
     this.resultsOverlay.hidden = true;
     this.root.classList.remove('is-finished');
   }
@@ -496,6 +656,8 @@ export class Hud {
   }
 
   dispose(): void {
+    this.activeVideoProvider?.dispose();
+    this.activeVideoProvider = null;
     window.clearTimeout(this.toastTimer);
     window.clearTimeout(this.balancePulseTimer);
     window.clearTimeout(this.tutorialTimer);

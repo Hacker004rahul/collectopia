@@ -116,6 +116,8 @@ export class EnemySystem {
   shieldActive = false;
   /** Set true when Freeze Enemy power-up is active (Phase 5). */
   freezeActive = false;
+  /** Set true while the player has temporary revive invulnerability. */
+  invulnerable = false;
 
   private readonly records: EnemyRecord[] = [];
   private rng = new Rng(0xf4ce1a7b);
@@ -272,6 +274,11 @@ export class EnemySystem {
       if (this.freezeActive) continue;
 
       rec.hitCooldown = ENEMIES.hitCooldown;
+      if (this.invulnerable) {
+        rec.knockbackRemaining = ENEMIES.knockbackDistance * 2;
+        continue;
+      }
+
       this._hitPos.set(rec.x, 1.2, ez);
 
       if (this.shieldActive) {
@@ -377,6 +384,7 @@ export class EnemySystem {
     this.frozenVisualActive = false;
     this.shieldActive = false;
     this.freezeActive = false;
+    this.invulnerable = false;
   }
 
   dispose(): void {
