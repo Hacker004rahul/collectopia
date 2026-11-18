@@ -115,13 +115,13 @@ const TEMPLATE = `
       </div>
       <p class="revive-error" role="alert" hidden></p>
       <div class="revive-offer">
-        <span class="revive-offer-label">ONE-TIME REVIVE</span>
+        <span class="revive-offer-label">REVIVE AVAILABLE</span>
         <p>Finish the local demo video to continue this run.</p>
       </div>
       <div class="revive-actions">
         <button class="revive-watch-button" type="button">
           <span>WATCH VIDEO</span>
-          <span class="revive-button-detail">CONTINUE THIS RUN</span>
+          <span class="revive-button-detail">REVIVE THIS RUN</span>
         </button>
         <button class="end-run-button" type="button">
           <span>END RUN</span>
@@ -142,14 +142,14 @@ const TEMPLATE = `
           preload="metadata"
           disablepictureinpicture
           controlslist="nodownload noplaybackrate noremoteplayback"
-          aria-label="Local demo video for a one-time run revive"
+          aria-label="Local demo video to revive this run"
         ></video>
       </div>
       <div class="revive-video-progress" role="progressbar" aria-label="Video progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
         <span class="revive-video-progress-fill"></span>
       </div>
       <p class="revive-video-countdown" role="status" aria-live="polite">Loading video...</p>
-      <p class="revive-video-note">Complete the full video to earn your one-time revive.</p>
+      <p class="revive-video-note">Complete the full video to revive this run.</p>
     </div>
   </div>
 `;
@@ -452,21 +452,19 @@ export class Hud {
     this.restartButton.focus();
   }
 
-  showRevivePrompt(results: RunResults, canRevive: boolean): void {
+  showRevivePrompt(results: RunResults): void {
     this.renderResults(results);
     this.restartButton.hidden = true;
-    this.reviveOffer.hidden = !canRevive;
-    this.reviveWatchButton.hidden = !canRevive;
+    this.reviveOffer.hidden = false;
+    this.reviveWatchButton.hidden = false;
     this.endRunButton.hidden = false;
-    this.reviveError.textContent = canRevive
-      ? ''
-      : 'Your one revive has already been used.';
-    this.reviveError.hidden = canRevive;
+    this.reviveError.textContent = '';
+    this.reviveError.hidden = true;
     this.resultsPanel.hidden = false;
     this.reviveVideoPanel.hidden = true;
     this.resultsOverlay.hidden = false;
     this.root.classList.add('is-finished');
-    (canRevive ? this.reviveWatchButton : this.endRunButton).focus();
+    this.reviveWatchButton.focus();
   }
 
   private renderResults(results: RunResults): void {
@@ -520,11 +518,9 @@ export class Hud {
         this.activeVideoProvider = null;
         this.reviveVideoPanel.hidden = true;
         this.resultsPanel.hidden = false;
-        this.reviveOffer.hidden = true;
-        this.reviveWatchButton.hidden = true;
         this.reviveError.textContent = message;
         this.reviveError.hidden = false;
-        this.endRunButton.focus();
+        this.reviveWatchButton.focus();
         this.callbacks.onReviveFailure();
       },
     });

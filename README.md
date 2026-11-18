@@ -11,7 +11,7 @@ A mobile-first 3D endless runner through a stylised Indian neighbourhood, built 
 - Five power-ups: Magnet (5 s), Shield (one hit), Super Punch (8 s), Double Coins (6 s), Freeze (5 s).
 - Obstacles and enemies, punch combat, breakable walls and shield interactions.
 - Obstacle collisions end the run; the results screen reports distance, level, coins, gates, enemies and final balance.
-- One local demo video revive is available per run after a fatal obstacle collision; the run resumes with its progress intact and two seconds of invulnerability.
+- Each completed local demo video can revive the run after a fatal obstacle collision; progress is preserved and every revive grants two seconds of invulnerability.
 - In-place restart with a fresh run balance while lifetime collected coins persist.
 - Ten authored levels followed by generated endless levels, with capped speed and difficulty scaling.
 - Difficulty tiers for intro, moderate, complex and endless play, plus cross-system spawn reservations.

@@ -29,7 +29,6 @@ import {
 } from '../obstacles/ObstacleSystem';
 import { EnemySystem, type EnemyHitEvent, type EnemyDefeatedEvent } from '../enemies/EnemySystem';
 import { PunchSystem } from '../enemies/PunchSystem';
-import { ReviveRunState } from './ReviveRunState';
 import {
   PowerUpSystem,
   type PowerUpCollectEvent,
@@ -56,7 +55,6 @@ export class Game {
   private readonly punch: PunchSystem;
   private readonly powerups: PowerUpSystem;
   private readonly reservations = new SpawnReservations();
-  private readonly reviveRun = new ReviveRunState();
   private readonly cameraLook = new THREE.Vector3();
   private readonly projected = new THREE.Vector3();
   private readonly pixelRatioCap: number;
@@ -125,10 +123,7 @@ export class Game {
       },
       onWatchRevive: () => this.watchReviveVideo(),
       onReviveComplete: () => this.completeRevive(),
-      onReviveFailure: () => {
-        this.revivePending = false;
-        this.reviveRun.failAttempt();
-      },
+      onReviveFailure: () => this.failRevive(),
       onEndRun: () => this.finalizeRun(),
     });
     this.hud.setBalance(this.economy.balance, false);
@@ -531,22 +526,20 @@ export class Game {
       reason,
     };
     this.revivePending = false;
-    this.hud.showRevivePrompt(results, this.reviveRun.available);
+    this.hud.showRevivePrompt(results);
   }
 
   private watchReviveVideo(): void {
-    if (!this.gameOver || !this.reviveRun.beginAttempt()) return;
+    if (!this.gameOver || this.revivePending) return;
 
     this.revivePending = true;
     if (!this.hud.playReviveVideo()) {
-      this.revivePending = false;
-      this.reviveRun.failAttempt();
+      this.failRevive();
     }
   }
 
   private completeRevive(): void {
     if (!this.gameOver || !this.revivePending) return;
-    if (!this.reviveRun.completeAttempt()) return;
 
     this.revivePending = false;
     this.obstacles.resumeAfterFatal();
@@ -556,6 +549,10 @@ export class Game {
     this.gameOver = false;
     this.clock.setPaused(false);
     this.hud.hideResults();
+  }
+
+  private failRevive(): void {
+    this.revivePending = false;
   }
 
   private finalizeRun(): void {
@@ -597,7 +594,6 @@ export class Game {
     this.gameOver = false;
     this.paused = false;
     this.revivePending = false;
-    this.reviveRun.reset();
     this.invulnerabilityTimer = 0;
     this.runEndReason = '';
 

@@ -34,7 +34,9 @@ export class LocalDemoVideoProvider {
     this.video.addEventListener('abort', this.handleAbort);
 
     try {
-      this.video.src = LOCAL_REVIVE_VIDEO_URL;
+      if (!this.video.src.endsWith(LOCAL_REVIVE_VIDEO_URL)) {
+        this.video.src = LOCAL_REVIVE_VIDEO_URL;
+      }
       if (this.video.currentTime > 0) this.video.currentTime = 0;
       void this.video.play().catch(() => {
         this.fail('The local video could not start. You can end the run.');
